@@ -93,6 +93,14 @@ def process_ecg_with_network_simulation(
 
         print("=" * 60)
 
+        # Print sample data of original and recovered data
+        if run_recovery_test and len(recovery_results["recovered_data"]) > 0 and len(compression_stats["original_data"]) > 0:
+            print("\nSample data:")
+            print("Original data (first 10 samples):")
+            print(compression_stats["original_data"][:10])
+            print("Recovered data (first 10 samples):")
+            print(recovery_results["recovered_data"][:10])
+
         return {
             "compression_stats": compression_stats,
             "recovery_results": recovery_results if run_recovery_test else None,

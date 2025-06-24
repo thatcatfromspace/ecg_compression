@@ -1,9 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import queue
 import threading
 import time
 import zlib
+import struct
 from typing import Tuple
+
 
 import boto3
 import numpy as np
@@ -88,34 +91,43 @@ class ECGStreamingCompressor:
         quantized = np.round(data * self.quantization_scale).astype(np.int32)
         return quantized
 
-    def compress_chunk(self, chunk: np.ndarray) -> Tuple[bytes, int]:
+    def _thread_compress_chunk(self, chunk: np.ndarray) -> bytes:
         """
-        Compress a chunk and calculate CRC32
+        Threaded method to compress a chunk and calculate CRC32
 
         Returns:
             Tuple of (compressed_data, crc32)
         """
-        quantized = self.quantize_data(chunk)
+        channel_data = np.asarray(chunk).reshape(-1)
+        quantized = self.quantize_data(channel_data)
+        delta_array = np.concatenate([[quantized[0]], np.diff(quantized)])
 
-        delta_array = np.vstack(
-            [quantized[0:1], np.diff(quantized, axis=0)]  # keep first sample as-is
+        return self.compressor.compress(delta_array.tobytes())
+
+    def compress_chunk(self, chunk: np.ndarray) -> bytes:
+        """
+        Multithreaded method to compress a chunk
+
+        Returns:
+            Tuple of (compressed_data, crc32)
+        """
+
+        transposed_chunk = chunk.T
+
+        with ThreadPoolExecutor(max_workers=transposed_chunk.shape[0]) as executor:
+            compressed_channels = list(
+                executor.map(self._thread_compress_chunk, transposed_chunk)
+            )
+
+        return b"".join(
+            [
+                struct.pack(">H", len(binary_channel)) + binary_channel
+                for binary_channel in compressed_channels
+            ]
         )
 
-        # Convert to bytes
-        chunk_bytes = delta_array.tobytes()
-
-        # Compress
-        compressed = self.compressor.compress(chunk_bytes)
-
-        # Calculate CRC32
-        crc32 = zlib.crc32(compressed) & 0xFFFFFFFF
-
-        assert delta_array.shape == chunk.shape
-
-        return compressed, crc32
-
     def decompress_chunk(
-        self, compressed_data: bytes, original_shape: tuple
+        self, compressed_data: bytes, dtype=np.int32
     ) -> np.ndarray:
         """
         Decompress a chunk back to original data
@@ -128,23 +140,25 @@ class ECGStreamingCompressor:
             Decompressed numpy array
         """
         try:
-            # Decompress
-            decompressed_bytes = self.decompressor.decompress(compressed_data)
+            channel_signals = []
+            i = 0
 
-            # Convert back to numpy array
-            delta_array = np.frombuffer(decompressed_bytes, dtype=np.int32).reshape(
-                original_shape
-            )
-            reconstructed_array = np.cumsum(delta_array, axis=0)
+            while i < len(compressed_data):
+                length = struct.unpack(">H", compressed_data[i:i+2])[0]
+                i += 2
 
-            # Dequantize
-            original_data = (
-                reconstructed_array.astype(np.float64) / self.quantization_scale
-            )
+                # Slice out the compressed chunk
+                compressed = compressed_data[i:i+length]
+                i += length
 
-            assert reconstructed_array.shape == original_shape
+                # Decompress + decode
+                decompressed = self.decompressor.decompress(compressed)
+                delta_array = np.frombuffer(decompressed, dtype=dtype)
+                signal = np.cumsum(delta_array).astype(np.float64) / self.quantization_scale
+                channel_signals.append(signal)
 
-            return original_data
+            # Stack channels vertically 
+            return np.stack(channel_signals, axis=0).T
 
         except Exception as e:
             logger.error(f"Error decompressing chunk: {e}")
@@ -201,7 +215,7 @@ class ECGStreamingCompressor:
                     break
 
                 # Quantize and compress
-                compressed_chunk, crc32 = self.compress_chunk(chunk)
+                compressed_chunk = self.compress_chunk(chunk)
 
                 # Store chunk info
                 chunk_info = {
@@ -209,7 +223,6 @@ class ECGStreamingCompressor:
                     "data": compressed_chunk,
                     "original_shape": chunk.shape,
                     "start_idx": start_idx,
-                    "crc32": crc32,
                     "compression_ratio": chunk.nbytes / len(compressed_chunk),
                 }
 
@@ -218,7 +231,7 @@ class ECGStreamingCompressor:
                 # Simulate network transmission
                 if self.network_sim:
                     transmission_success = self.network_sim.transmit_chunk(
-                        compressed_chunk, chunk_id, crc32
+                        compressed_chunk, chunk_id
                     )
                     chunk_info["transmitted"] = transmission_success
 
@@ -289,9 +302,9 @@ class ECGStreamingCompressor:
         stats = {
             "original_size_mb": original_size / (1024 * 1024),
             "compressed_size_mb": compressed_size / (1024 * 1024),
-            "compression_ratio": original_size / compressed_size,
+            "compression_ratio": original_size / compressed_size if compressed_size > 0 else 0,
             "processing_time_sec": processing_time,
-            "throughput_samples_per_sec": self.processed_samples / processing_time,
+            "throughput_samples_per_sec": self.processed_samples / processing_time if processing_time > 0 else 0,
             "num_chunks": len(self.compressed_data),
             "metadata": metadata,
             "original_data": signal_data,  # Store for comparison
@@ -336,7 +349,7 @@ class ECGStreamingCompressor:
 
                 if original_chunk:
                     decompressed = self.decompress_chunk(
-                        chunk_data, original_chunk["original_shape"]
+                        chunk_data
                     )
                     recovered_data.append(decompressed)
                 else:

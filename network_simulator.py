@@ -4,6 +4,8 @@ import time
 from pathlib import Path
 from typing import List
 
+import zlib
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ class ECGNetworkSimulator:
         self.transmission_delay = transmission_delay
         self.transmitted_chunks = []
 
-    def transmit_chunk(self, chunk_data: bytes, chunk_id: int, crc32: int) -> bool:
+    def transmit_chunk(self, chunk_data: bytes, chunk_id: int) -> bool:
         """
         Simulate chunk transmission by writing to file
 
@@ -50,7 +52,7 @@ class ECGNetworkSimulator:
             # Write chunk with metadata
             chunk_packet = {
                 "chunk_id": chunk_id,
-                "crc32": crc32,
+                "crc32": zlib.crc32(chunk_data) & 0xFFFFFFFF, 
                 "data_size": len(chunk_data),
                 "timestamp": time.time(),
             }
