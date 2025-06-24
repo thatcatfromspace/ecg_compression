@@ -1,18 +1,17 @@
-import wfdb
-import numpy as np
-import zstandard as zstd
-import time
-import threading
-import queue
-import zlib
-import boto3
 import logging
+import queue
+import threading
+import time
+import zlib
 from typing import Tuple
 
-# Import internal modules
+import boto3
+import numpy as np
+import wfdb
+import zstandard as zstd
+
 from network_simulator import ECGNetworkSimulator
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 
@@ -98,10 +97,9 @@ class ECGStreamingCompressor:
         """
         quantized = self.quantize_data(chunk)
 
-        delta_array = np.vstack([
-            quantized[0:1],  # keep first sample as-is
-            np.diff(quantized, axis=0)
-        ])
+        delta_array = np.vstack(
+            [quantized[0:1], np.diff(quantized, axis=0)]  # keep first sample as-is
+        )
 
         # Convert to bytes
         chunk_bytes = delta_array.tobytes()
@@ -134,7 +132,9 @@ class ECGStreamingCompressor:
             decompressed_bytes = self.decompressor.decompress(compressed_data)
 
             # Convert back to numpy array
-            delta_array = np.frombuffer(decompressed_bytes, dtype=np.int32).reshape(original_shape)
+            delta_array = np.frombuffer(decompressed_bytes, dtype=np.int32).reshape(
+                original_shape
+            )
             reconstructed_array = np.cumsum(delta_array, axis=0)
 
             # Dequantize
@@ -143,7 +143,7 @@ class ECGStreamingCompressor:
             )
 
             assert reconstructed_array.shape == original_shape
-            
+
             return original_data
 
         except Exception as e:
@@ -355,12 +355,14 @@ class ECGStreamingCompressor:
         test_results = {
             "reception_stats": reception_stats,
             "decompression_errors": decompression_errors,
-            "recovered_samples": len(recovered_signal)
-            if len(recovered_signal.shape) > 1
-            else 0,
-            "recovery_success_rate": len(received_chunks) / len(self.compressed_data)
-            if self.compressed_data
-            else 0,
+            "recovered_samples": (
+                len(recovered_signal) if len(recovered_signal.shape) > 1 else 0
+            ),
+            "recovery_success_rate": (
+                len(received_chunks) / len(self.compressed_data)
+                if self.compressed_data
+                else 0
+            ),
             "recovered_data": recovered_signal,
         }
 

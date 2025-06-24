@@ -1,5 +1,7 @@
 import logging
+
 import numpy as np
+
 from compressor import ECGStreamingCompressor
 
 # Configure logging
@@ -36,7 +38,7 @@ def process_ecg_with_network_simulation(
         print(f"Original size: {compression_stats['original_size_mb']:.2f} MB")
         print(f"Compressed size: {compression_stats['compressed_size_mb']:.2f} MB")
         print(f"Compression ratio: {compression_stats['compression_ratio']:.3f}")
-        print(f"Space saved: {(1-compression_stats['compression_ratio'])*100:.1f}%")
+        print(f"Space saved: {(1-(1/compression_stats['compression_ratio']))*100:.1f}%")
         print(
             f"Processing time: {compression_stats['processing_time_sec']:.2f} seconds"
         )
@@ -104,7 +106,7 @@ def process_ecg_with_network_simulation(
 if __name__ == "__main__":
     # Example usage
     try:
-        results = process_ecg_with_network_simulation("data/s20011")
+        results = process_ecg_with_network_simulation("data/test01_00s")
         print("Processing completed successfully.")
     except Exception as e:
         print(f"An error occurred: {e}")

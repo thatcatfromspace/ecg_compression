@@ -1,9 +1,9 @@
-import time
 import json
-import zlib
 import logging
+import time
+import zlib
 from pathlib import Path
-from typing import Tuple, List
+from typing import List, Tuple
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -97,9 +97,9 @@ class ECGReceiver:
             "successful_receptions": successful_receptions,
             "crc_failures": len(self.crc_failures),
             "failed_chunk_ids": self.crc_failures,
-            "reception_rate": successful_receptions / len(chunk_files)
-            if chunk_files
-            else 0,
+            "reception_rate": (
+                successful_receptions / len(chunk_files) if chunk_files else 0
+            ),
         }
 
         return stats
