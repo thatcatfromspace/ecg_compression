@@ -33,6 +33,14 @@ Compressed size: 35.54 MB
 Compression ratio: 8.843
 ```
 
+__**Motion Artifact Contaminated ECG Database**__
+
+```
+Original size: 0.12 MB
+Compressed size: 0.01 MB
+Compression ratio: 9.789
+```
+
 ## Loading a dataset 
 
 Uses `wfdb` to load Physionet databases currently. The ingestion logic can be changed to fit use cases.
