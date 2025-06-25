@@ -47,6 +47,8 @@ def process_ecg_with_network_simulation(
         )
         print(f"Number of chunks transmitted: {compression_stats['num_chunks']}")
 
+        recovery_results = {}
+    
         # Test transmission and recovery
         if run_recovery_test:
             print("\n" + "=" * 60)
@@ -114,7 +116,7 @@ def process_ecg_with_network_simulation(
 if __name__ == "__main__":
     # Example usage
     try:
-        results = process_ecg_with_network_simulation("data/test01_00s")
+        results = process_ecg_with_network_simulation("data/s20011")
         print("Processing completed successfully.")
     except Exception as e:
         print(f"An error occurred: {e}")

@@ -3,7 +3,6 @@ import logging
 import queue
 import threading
 import time
-import zlib
 import struct
 from typing import Tuple
 
@@ -55,7 +54,7 @@ class ECGStreamingCompressor:
             self.network_sim = None
 
         # Initialize compressor and decompressor
-        self.compressor = zstd.ZstdCompressor(level=compression_level)
+        self.compressor = zstd.ZstdCompressor(level=compression_level, threads=-1)
         self.decompressor = zstd.ZstdDecompressor()
 
         # AWS S3 client (optional)
